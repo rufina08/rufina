@@ -5,16 +5,16 @@ P_ALUMINUM = 2700   # 2 - алюминий, кг/м³
 P_COPPER = 8900     # 3 - медь, кг/м³
 
 # --- Допустимые диапазоны входных данных ---
-L_MIN: float = 0.1
+L_MIN: float = 0.1 #длина листа
 L_MAX: float = 5.0
 
-W_MIN: float = 0.1
+W_MIN: float = 0.1 #ширина листа
 W_MAX: float = 3.0
 
-T_MIN: float = 0.1
+T_MIN: float = 0.1 #толщина листа
 T_MAX: float = 20.0
 
-Q_MIN: int = 1
+Q_MIN: int = 1 #колво листов
 Q_MAX: int = 1000
 
 # --- Пороговые значения для классификации толщины ---
