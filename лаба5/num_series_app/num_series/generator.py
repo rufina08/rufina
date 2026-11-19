@@ -1,4 +1,3 @@
-import math
 import random
 from typing import List, Optional
 
@@ -18,10 +17,32 @@ def _validate_n(n: int) -> None:
         )
 
 
-def random_series(n: int,
-                  low: float = -100.0,
-                  high: float = 100.0,
-                  seed: Optional[int] = None) -> List[float]:
+def gauss_series(
+    n: int = 500,
+    mu: float = 50.0,
+    sigma: float = 10.0,
+    seed: Optional[int] = None,
+) -> List[float]:
+    """Ряд из n чисел нормального распределения N(mu, sigma^2) (Вариант 2)."""
+    _validate_n(n)
+    if sigma < 0:
+        raise ValueError(f"sigma не может быть отрицательным (получено: {sigma})")
+    rng = random.Random(seed)
+    return [rng.gauss(mu, sigma) for _ in range(n)]
+
+
+def constant_series(n: int = 500, value: float = 50.0) -> List[float]:
+    """Ряд из одинаковых значений (для проверки краевого кейса СКО = 0)."""
+    _validate_n(n)
+    return [float(value) for _ in range(n)]
+
+
+def random_series(
+    n: int,
+    low: float = -100.0,
+    high: float = 100.0,
+    seed: Optional[int] = None,
+) -> List[float]:
     """Ряд из n равномерно распределённых случайных чисел на [low, high]."""
     _validate_n(n)
     if low >= high:
@@ -29,31 +50,3 @@ def random_series(n: int,
     rng = random.Random(seed)
     return [rng.uniform(low, high) for _ in range(n)]
 
-
-def sine_series(n: int,
-                amplitude: float = 1.0,
-                frequency: float = 1.0,
-                noise: float = 0.0,
-                seed: Optional[int] = None) -> List[float]:
-    """Синусоидальный ряд с аддитивным шумом (для наглядной проверки MA)."""
-    _validate_n(n)
-    rng = random.Random(seed)
-    return [
-        amplitude * math.sin(2 * math.pi * frequency * i / n)
-        + (rng.uniform(-noise, noise) if noise else 0.0)
-        for i in range(n)
-    ]
-
-
-def trend_series(n: int,
-                 start: float = 0.0,
-                 step: float = 1.0,
-                 noise: float = 0.0,
-                 seed: Optional[int] = None) -> List[float]:
-    """Линейный тренд (полезно, чтобы увидеть, что MA смещается)."""
-    _validate_n(n)
-    rng = random.Random(seed)
-    return [
-        start + step * i + (rng.uniform(-noise, noise) if noise else 0.0)
-        for i in range(n)
-    ]

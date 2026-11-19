@@ -1,16 +1,4 @@
-"""Сохранение и чтение числовых рядов в формате JSON.
-Формат файла:
-{
-    "meta": {
-        "kind": "sine",
-        "n": 20,
-        "seed": 42,
-        "created": "2025-01-15T10:30:00"
-    },
-    "data": [0.0, 8.09, 9.51, ...]
-}
-Метаданные опциональны — при чтении они не обязательны.
-"""
+"""Сохранение и чтение числовых рядов в формате JSON."""
 from __future__ import annotations
 
 import json
@@ -20,7 +8,6 @@ from typing import Any, Dict, List, Optional, Union
 
 PathLike = Union[str, Path]
 
-# Сохранение
 
 def save_series_json(
     data: List[float],
@@ -28,27 +15,13 @@ def save_series_json(
     meta: Optional[Dict[str, Any]] = None,
     indent: int = 2,
 ) -> None:
-    """Сохраняет числовой ряд в JSON-файл.
-
-    Args:
-        data: числовой ряд (непустой список float/int).
-        path: путь к файлу (создастся или перезапишется).
-        meta: произвольные метаданные (kind, seed, ...). Добавится
-              автоматически поле "created" с текущим временем.
-        indent: отступ для читаемости (None — компактный JSON).
-
-    Raises:
-        ValueError: если data пуст или содержит нечисловые элементы.
-    """
+    """Сохраняет числовой ряд в JSON-файл."""
     if not data:
         raise ValueError("Ряд пуст: нечего сохранять")
 
-    # Проверка типов — иначе json.dump упадёт с непонятной ошибкой
     for i, v in enumerate(data):
         if not isinstance(v, (int, float)) or isinstance(v, bool):
-            raise ValueError(
-                f"Элемент data[{i}] = {v!r} не является числом"
-            )
+            raise ValueError(f"Элемент data[{i}] = {v!r} не является числом")
 
     payload: Dict[str, Any] = {
         "meta": {
@@ -67,27 +40,9 @@ def save_series_json(
     except OSError as err:
         raise ValueError(f"Не удалось записать файл {file_path}: {err}") from err
 
-# Чтение
 
 def load_series_json(path: PathLike, with_meta: bool = False):
-    """Читает числовой ряд из JSON-файла.
-
-    Поддерживает два формата:
-    1. {"data": [...], "meta": {...}} — «полный» формат (наш)
-    2. [...] — «голый» список чисел
-
-    Args:
-        path: путь к файлу.
-        with_meta: если True, возвращает кортеж (data, meta);
-                   если False — только список чисел.
-
-    Returns:
-        list[float] или (list[float], dict).
-
-    Raises:
-        ValueError: если файл не найден, не JSON, нет поля data,
-                    data не список или содержит нечисловые элементы.
-    """
+    """Читает числовой ряд из JSON-файла."""
     file_path = Path(path)
     if not file_path.exists():
         raise ValueError(f"Файл не найден: {file_path}")
@@ -103,14 +58,11 @@ def load_series_json(path: PathLike, with_meta: bool = False):
     except OSError as err:
         raise ValueError(f"Не удалось прочитать файл {file_path}: {err}") from err
 
-    # Поддержка «голого» списка
     if isinstance(payload, list):
         data, meta = payload, {}
     elif isinstance(payload, dict):
         if "data" not in payload:
-            raise ValueError(
-                f"В файле {file_path} нет поля 'data'"
-            )
+            raise ValueError(f"В файле {file_path} нет поля 'data'")
         data = payload["data"]
         meta = payload.get("meta", {}) or {}
     else:
@@ -135,3 +87,4 @@ def load_series_json(path: PathLike, with_meta: bool = False):
 
     result = [float(v) for v in data]
     return (result, meta) if with_meta else result
+

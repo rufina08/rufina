@@ -1,49 +1,35 @@
-"""Точка входа: обработка числовых рядов (генерация / чтение / сохранение).
-
-Примеры:
-    # Генерация + анализ
-    python main.py --kind sine --n 20 --window 3 --seed 7
-
-    # Генерация + сохранение в JSON
-    python main.py --kind random --n 50 --save data/random.json
-
-    # Загрузка из файла + анализ
-    python main.py --load data/random.json --window 5
-    python main.py --load data/series.csv --window 5
-
-    # Пайплайн: генерация → сохранение → чтение → анализ
-    python main.py --kind sine --n 30 --save data/s.json
-    python main.py --load data/s.json --window 3
-
-    # Экспорт результата в CSV
-    python main.py --kind trend --n 30 --export out.csv
-"""
+"""Точка входа CLI: обработка числовых рядов (Вариант 2)."""
 from __future__ import annotations
 
 import argparse
 import csv
-import json
 import sys
 from typing import List, Optional, Tuple
 
 from num_series import (
-    random_series, sine_series, trend_series,
+    gauss_series,
+    constant_series,
+    random_series,
     summarize,
-    simple_moving_average, centered_moving_average, exponential_moving_average,
-    save_series_json, load_series_auto,
+    simple_moving_average,
+    simple_moving_average_deque,
+    weighted_moving_average,
+    benchmark_moving_average,
+    save_series_json,
+    load_series_auto,
 )
 
-# Источники данных
 
 def build_series(kind: str, n: int, seed: int) -> List[float]:
     """Генерирует ряд заданного типа."""
+    if kind == "gauss":
+        return gauss_series(n=n, mu=50.0, sigma=10.0, seed=seed)
+    if kind == "constant":
+        return constant_series(n=n, value=50.0)
     if kind == "random":
-        return random_series(n, low=-50, high=50, seed=seed)
-    if kind == "sine":
-        return sine_series(n, amplitude=10, frequency=2, noise=1.5, seed=seed)
-    if kind == "trend":
-        return trend_series(n, start=0, step=1.0, noise=0.5, seed=seed)
+        return random_series(n=n, low=0.0, high=100.0, seed=seed)
     raise ValueError(f"Неизвестный тип ряда: {kind!r}")
+
 
 def obtain_series(args: argparse.Namespace) -> Tuple[List[float], str]:
     """Возвращает (ряд, описание источника)."""
@@ -53,10 +39,9 @@ def obtain_series(args: argparse.Namespace) -> Tuple[List[float], str]:
     data = build_series(args.kind, args.n, args.seed)
     return data, f"сгенерирован ({args.kind}, n={args.n}, seed={args.seed})"
 
-# Экспорт в CSV
 
 def export_series_csv(path: str, data: List[float]) -> None:
-    """Экспорт ряда в CSV: столбцы i, value. Ошибки нормализуются в ValueError."""
+    """Экспорт ряда в CSV."""
     try:
         with open(path, "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
@@ -66,75 +51,67 @@ def export_series_csv(path: str, data: List[float]) -> None:
     except OSError as err:
         raise ValueError(f"Не удалось записать CSV {path}: {err}") from err
 
-# Печать
 
-def print_series(title: str, values: List[float], fmt: str = "{:>10.3f}") -> None:
+def print_series_preview(title: str, values: List[float], limit: int = 10) -> None:
+    """Печатает первые limit элементов ряда."""
+    preview = values[:limit]
+    formatted = " ".join(f"{v:>8.3f}" for v in preview)
+    suffix = " ..." if len(values) > limit else ""
     print(f"\n{title} (n={len(values)}):")
-    print(" " + " ".join(fmt.format(v) for v in values))
+    print(f" {formatted}{suffix}")
 
-def print_header(source: str) -> None:
-    print("=" * 60)
-    print(f"Источник данных: {source}")
-    print("-" * 60)
 
 def print_stats(stats: dict) -> None:
+    modes_str = ", ".join(f"{m:.4f}" for m in stats["mode"][:5])
+    if len(stats["mode"]) > 5:
+        modes_str += f" ... (всего {len(stats['mode'])})"
+
     print(f"Среднее арифметическое : {stats['mean']:>10.4f}")
     print(f"Медиана                : {stats['median']:>10.4f}")
     print(f"Размах (max - min)     : {stats['spread']:>10.4f}")
+    print(f"СКО (stdev)            : {stats['stdev']:>10.4f}")
+    print(f"Мода (Counter)         : [{modes_str}]")
     print(f"min / max              : {stats['min']:>10.4f} / {stats['max']:.4f}")
 
-def print_footer() -> None:
-    print("=" * 60)
-
-# CLI
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Алгоритмическая обработка числовых рядов",
+        description="Алгоритмическая обработка числовых рядов (Вариант 2)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        epilog="Пример: python main.py --kind sine --n 20 --save data/s.json",
     )
-    # источники
-    parser.add_argument("--kind", choices=["random", "sine", "trend"], default="sine",
-                        help="тип генерируемого ряда")
-    parser.add_argument("--n", type=int, default=20,
-                        help="количество точек в ряде")
-    parser.add_argument("--seed", type=int, default=42,
-                        help="зерно ГПСЧ для воспроизводимости")
-    parser.add_argument("--load", metavar="PATH",
-                        help="загрузить ряд из файла (.json/.txt/.csv); "
-                             "отменяет --kind/--n/--seed")
-    # экспорт
-    parser.add_argument("--save", metavar="PATH",
-                        help="сохранить ряд в JSON-файл")
-    parser.add_argument("--export", metavar="FILE",
-                        help="экспортировать ряд в CSV (i, value)")
-    # анализ
-    parser.add_argument("--window", type=int, default=3,
-                        help="размер окна для скользящей средней")
-    parser.add_argument("--alpha", type=float, default=0.3,
-                        help="коэффициент сглаживания для EMA, 0 < alpha <= 1")
+    parser.add_argument(
+        "--kind",
+        choices=["gauss", "constant", "random"],
+        default="gauss",
+        help="тип генерируемого ряда (constant — краевой кейс)",
+    )
+    parser.add_argument("--n", type=int, default=1000, help="длина ряда (по умолчанию 1000)")
+    parser.add_argument("--window", type=int, default=10, help="размер окна k (по умолчанию 10)")
+    parser.add_argument("--seed", type=int, default=42, help="зерно ГПСЧ")
+    parser.add_argument("--load", metavar="PATH", help="загрузить ряд из файла")
+    parser.add_argument("--save", metavar="PATH", help="сохранить ряд в JSON")
+    parser.add_argument("--export", metavar="FILE", help="экспортировать ряд в CSV")
+    parser.add_argument(
+        "--benchmark",
+        action="store_true",
+        help="замерить время выполнения SMA для list и deque",
+    )
     return parser
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
 
-    # --- 1. Получаем ряд ---
     try:
         data, source = obtain_series(args)
     except ValueError as err:
         print(f"Ошибка получения ряда: {err}", file=sys.stderr)
         return 1
 
-    # --- 2. Сохраняем (до анализа — данные на диске даже при ошибке анализа) ---
     if args.save:
-        meta = {"source": source}
-        if not args.load:
-            meta.update({"kind": args.kind, "seed": args.seed})
         try:
-            save_series_json(data, args.save, meta=meta)
-            print(f"[сохранено] {args.save} ({len(data)} точек)")
+            save_series_json(data, args.save, meta={"source": source})
+            print(f"[сохранено] {args.save}")
         except ValueError as err:
             print(f"Ошибка сохранения: {err}", file=sys.stderr)
             return 1
@@ -142,35 +119,41 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.export:
         try:
             export_series_csv(args.export, data)
-            print(f"[экспортировано] {args.export} ({len(data)} точек)")
+            print(f"[экспортировано] {args.export}")
         except ValueError as err:
             print(f"Ошибка экспорта: {err}", file=sys.stderr)
             return 1
 
-    # --- 3. Анализ ---
     try:
         stats = summarize(data)
-        sma = simple_moving_average(data, args.window)
-        ema = exponential_moving_average(data, args.alpha)
-        cma = (
-            centered_moving_average(data, args.window)
-            if args.window % 2 == 1 else None
-        )
+        sma_list = simple_moving_average(data, args.window)
+        sma_deque = simple_moving_average_deque(data, args.window)
+        wma = weighted_moving_average(data, args.window)
     except ValueError as err:
         print(f"Ошибка анализа: {err}", file=sys.stderr)
         return 1
 
-    # --- 4. Вывод ---
-    print_header(source)
+    print("=" * 65)
+    print(f"Источник данных: {source}")
+    print("-" * 65)
     print_stats(stats)
-    print_series("Исходный ряд", data)
-    print_series(f"SMA (window={args.window})", sma)
-    print_series(f"EMA (alpha={args.alpha})", ema)
-    if cma is not None:
-        print_series(f"Центрированное MA (window={args.window})", cma)
-    print_footer()
+    print_series_preview("Исходный ряд", data)
+    print_series_preview(f"SMA list (window={args.window})", sma_list)
+    print_series_preview(f"SMA deque (window={args.window})", sma_deque)
+    print_series_preview(f"WMA линейные веса (window={args.window})", wma)
+
+    if args.benchmark:
+        print("-" * 65)
+        print("Замер времени выполнения SMA (среднее за 1000 повторов):")
+        timings = benchmark_moving_average(data, args.window, repeats=1000)
+        print(f"  list  : {timings['list']:.8f} с")
+        print(f"  deque : {timings['deque']:.8f} с")
+        print(f"  отношение (list/deque): {timings['list'] / timings['deque']:.2f}")
+
+    print("=" * 65)
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

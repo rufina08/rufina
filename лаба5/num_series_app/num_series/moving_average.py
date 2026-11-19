@@ -1,19 +1,25 @@
-from typing import List, Sequence
+import time
+from typing import Dict, List, Sequence
+
+from .deque_average import simple_moving_average_deque
 
 
 def check_window(window: int, n: int) -> None:
-    """Проверка корректности окна: целое >= 1 и window <= n."""
-    if isinstance(window, bool) or not isinstance(window, int) or window < 1:
-        raise ValueError(f"window должно быть целым числом >= 1 (получено: {window!r})")
+    """Валидация размера окна."""
+    if not isinstance(window, int) or isinstance(window, bool):
+        raise ValueError(f"window должен быть целым числом, получено: {window!r}")
+    if window < 1:
+        raise ValueError(f"window должен быть >= 1, получено: {window}")
     if window > n:
         raise ValueError(f"window ({window}) больше длины ряда ({n})")
 
 
 def simple_moving_average(data: Sequence[float], window: int) -> List[float]:
-    """Простое скользящее среднее (SMA) через бегущую сумму (O(n))."""
+    """SMA через бегущую сумму по списку (O(n))."""
     if not data:
-        raise ValueError("Ряд пуст: расчёт SMA невозможен")
+        raise ValueError("Ряд пуст")
     check_window(window, len(data))
+
     running = sum(data[:window])
     result = [running / window]
     for i in range(window, len(data)):
@@ -21,22 +27,40 @@ def simple_moving_average(data: Sequence[float], window: int) -> List[float]:
         result.append(running / window)
     return result
 
-def centered_moving_average(data: Sequence[float], window: int) -> List[float]:
-    """Центрированное скользящее среднее (окно нечётное, выход выровнен по центру)."""
-    if not data:
-        raise ValueError("Ряд пуст: расчёт центрированного MA невозможен")
-    check_window(window, len(data))
-    if window % 2 == 0:
-        raise ValueError(f"Для центрированного MA окно должно быть нечётным (получено: {window})")
-    return simple_moving_average(data, window)
 
-def exponential_moving_average(data: Sequence[float], alpha: float) -> List[float]:
-    """Экспоненциальное скользящее среднее (EMA), 0 < alpha <= 1."""
+def weighted_moving_average(data: Sequence[float], window: int) -> List[float]:
+    """Взвешенная скользящая средняя (WMA) с линейными весами 1, 2, ..., window."""
     if not data:
-        raise ValueError("Ряд пуст: расчёт EMA невозможен")
-    if isinstance(alpha, bool) or not isinstance(alpha, (int, float)) or not (0 < alpha <= 1):
-        raise ValueError(f"alpha должно удовлетворять условию 0 < alpha <= 1 (получено: {alpha!r})")
-    ema = [float(data[0])]
-    for i in range(1, len(data)):
-        ema.append(alpha * data[i] + (1 - alpha) * ema[i - 1])
-    return ema
+        raise ValueError("Ряд пуст")
+    check_window(window, len(data))
+
+    weights = list(range(1, window + 1))
+    weight_sum = window * (window + 1) / 2.0
+    result: List[float] = []
+
+    for i in range(len(data) - window + 1):
+        window_slice = data[i : i + window]
+        weighted_val = sum(x * w for x, w in zip(window_slice, weights)) / weight_sum
+        result.append(weighted_val)
+
+    return result
+
+
+def benchmark_moving_average(
+    data: Sequence[float], window: int, repeats: int = 1000
+) -> Dict[str, float]:
+    """Замеряет среднее время выполнения SMA для реализаций на list и deque."""
+    check_window(window, len(data))
+
+    t0 = time.perf_counter()
+    for _ in range(repeats):
+        simple_moving_average(data, window)
+    t_list = (time.perf_counter() - t0) / repeats
+
+    t0 = time.perf_counter()
+    for _ in range(repeats):
+        simple_moving_average_deque(data, window)
+    t_deque = (time.perf_counter() - t0) / repeats
+
+    return {"list": t_list, "deque": t_deque}
+

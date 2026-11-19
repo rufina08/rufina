@@ -1,10 +1,4 @@
-"""Чтение числовых рядов из простых текстовых файлов.
-
-Поддерживаемые форматы:
- .txt — по одному числу на строку (пустые строки и #-комментарии пропускаются)
- .csv — числа через запятую / точку с запятой / пробел / табуляцию
-        (первая строка, начинающаяся с "value" или "x", считается заголовком)
-"""
+"""Чтение числовых рядов из простых текстовых файлов (.txt, .csv)."""
 from __future__ import annotations
 
 import re
@@ -13,6 +7,7 @@ from typing import List, Union
 
 PathLike = Union[str, Path]
 _SEPARATORS = re.compile(r"[,;\s]+")
+
 
 def load_series_txt(path: PathLike) -> List[float]:
     """Читает числа из .txt — по одному на строку."""
@@ -40,6 +35,7 @@ def load_series_txt(path: PathLike) -> List[float]:
         raise ValueError(f"Файл {file_path} не содержит чисел")
     return result
 
+
 def load_series_csv(path: PathLike) -> List[float]:
     """Читает числа из .csv — через разделитель, возможно, с заголовком."""
     file_path = Path(path)
@@ -56,12 +52,11 @@ def load_series_csv(path: PathLike) -> List[float]:
                 tokens = [t for t in _SEPARATORS.split(line) if t]
                 if not tokens:
                     continue
-                # Пропускаем заголовок: первая строка, где первое поле не число
                 try:
                     values = [float(t) for t in tokens]
                 except ValueError:
                     if lineno == 1:
-                        continue  # считаем это заголовком
+                        continue
                     raise ValueError(
                         f"{file_path}:{lineno}: строка '{line}' содержит "
                         f"нечисловые значения"
@@ -74,14 +69,9 @@ def load_series_csv(path: PathLike) -> List[float]:
         raise ValueError(f"Файл {file_path} не содержит чисел")
     return result
 
-def load_series_auto(path: PathLike) -> List[float]:
-    """Автоматически выбирает парсер по расширению.
 
-    .json      → load_series_json
-    .txt, .dat → load_series_txt
-    .csv, .tsv → load_series_csv
-    иначе      → пробует csv, при ошибке — txt
-    """
+def load_series_auto(path: PathLike) -> List[float]:
+    """Автоматически выбирает парсер по расширению."""
     from .io_json import load_series_json
 
     suffix = Path(path).suffix.lower()
@@ -95,3 +85,4 @@ def load_series_auto(path: PathLike) -> List[float]:
         return load_series_csv(path)
     except ValueError:
         return load_series_txt(path)
+
